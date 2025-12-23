@@ -1,34 +1,42 @@
-/* Snow Fall Effect CSS */
+/* Snow Fall Effect - CSS Mejorado */
 #snow-container {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    pointer-events: none !important;
-    overflow: hidden !important;
-    z-index: 12000 !important;
+    /* Estas propiedades se sobreescriben por JavaScript */
+    /* Solo valores por defecto por si JS falla */
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 12000;
+    overflow: hidden;
 }
 
 .snowflake {
-    position: absolute !important;
-    top: -20px !important;
-    color: white !important;
-    font-size: 20px !important;
-    line-height: 1 !important;
-    user-select: none !important;
-    pointer-events: none !important;
-    animation-timing-function: linear, ease-in-out !important;
-    animation-iteration-count: infinite !important;
+    /* Valores por defecto */
+    position: absolute;
+    top: -50px;
+    color: #ffffff;
+    user-select: none;
+    pointer-events: none;
+    z-index: 12000;
+    display: block;
+    visibility: visible;
+    
+    /* Animaciones base */
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    
+    /* Mejorar renderizado */
     will-change: transform, opacity;
-    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
-    z-index: 12000 !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
-/* Fall animation */
-@keyframes snow-fall {
+/* Keyframes base como respaldo */
+@keyframes snowFall {
     0% {
-        transform: translateY(-20px) translateX(0) rotate(0deg);
+        transform: translateY(-50px) rotate(0deg);
         opacity: 0;
     }
     10% {
@@ -38,34 +46,33 @@
         opacity: 1;
     }
     100% {
-        transform: translateY(calc(100vh + 20px)) translateX(var(--sway-distance)) rotate(360deg);
+        transform: translateY(calc(100vh + 50px)) rotate(360deg);
         opacity: 0;
     }
 }
 
-/* Sway animation */
-@keyframes snow-sway {
+@keyframes snowSway {
     0%, 100% {
         transform: translateX(0);
     }
     50% {
-        transform: translateX(var(--sway-amount));
+        transform: translateX(50px);
     }
 }
 
-/* Responsive adjustments */
+/* Mejoras para móviles */
 @media (max-width: 768px) {
-    #snow-container {
-        z-index: 9999 !important;
+    .snowflake {
+        /* Reducir cantidad implícitamente haciéndolos más grandes */
+        font-size: 20px !important;
     }
     
-    .snowflake {
-        font-size: 16px !important;
-        z-index: 9999 !important;
+    #snow-container {
+        z-index: 10000 !important;
     }
 }
 
-/* Print styles - hide snow when printing */
+/* Para impresión */
 @media print {
     #snow-container,
     .snowflake {
