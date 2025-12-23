@@ -3,7 +3,7 @@
  * Plugin Name: Snow Fall Effect
  * Plugin URI: https://yourwebsite.com/
  * Description: Adds a beautiful snowfall effect to your WordPress site
- * Version: 1.0.1
+ * Version: 2.0.0
  * Author: Your Name
  * License: GPL v2 or later
  * Text Domain: snow-fall-effect
@@ -35,8 +35,8 @@ class SnowFallEffect {
         // Add snow effect to footer
         add_action('wp_footer', array($this, 'render_snow_effect'), 100);
         
-        // Add inline styles after theme styles
-        add_action('wp_head', array($this, 'add_inline_styles'), 100);
+        // Add inline styles for critical properties
+        add_action('wp_head', array($this, 'add_critical_styles'), 99);
     }
     
     /**
@@ -44,25 +44,28 @@ class SnowFallEffect {
      */
     public function enqueue_scripts() {
         // Only enqueue on front-end
-        if (is_admin()) {
+        if (is_admin() || !$this->should_show_snow()) {
             return;
         }
         
-        // Enqueue CSS with late priority
+        // Enqueue CSS
         wp_enqueue_style(
             'snow-fall-effect-css',
             plugin_dir_url(__FILE__) . 'css/snow-fall-effect.css',
             array(),
-            '1.0.1'
+            '2.0.0'
         );
         
-        // Enqueue JavaScript
+        // Enqueue JavaScript - NO jQuery dependency
         wp_enqueue_script(
             'snow-fall-effect-js',
             plugin_dir_url(__FILE__) . 'js/snow-fall-effect.js',
-            array(),
-            '1.0.1',
-            true
+            array(), // No dependencies
+            '2.0.0',
+            array(
+                'strategy'  => 'defer',
+                'in_footer' => true
+            )
         );
         
         // Pass settings to JavaScript
@@ -71,43 +74,57 @@ class SnowFallEffect {
     }
     
     /**
-     * Get all settings with defaults
+     * Add critical inline styles
      */
-    private function get_settings() {
-        return array(
-            'snowflakeCount' => get_option('snow_flake_count', 80),
-            'snowflakeSpeed' => get_option('snow_speed', 1),
-            'snowflakeSize' => get_option('snow_size', 2),
-            'snowflakeColor' => get_option('snow_color', '#ffffff'),
-            'snowflakeCharacter' => get_option('snow_character', '❄'),
-            'enableOnMobile' => get_option('snow_mobile_enable', 'no'),
-            'onlyWinter' => get_option('snow_only_winter', 'no'),
-            'zIndex' => get_option('snow_zindex', '12000'),
-            'enableOnAllPages' => get_option('snow_enable_all_pages', 'yes'),
-            'excludedPages' => get_option('snow_excluded_pages', ''),
-            'snowEnabled' => $this->should_show_snow() ? 'yes' : 'no'
-        );
-    }
-    
-    /**
-     * Add inline styles
-     */
-    public function add_inline_styles() {
+    public function add_critical_styles() {
         if (!$this->should_show_snow()) {
             return;
         }
         
-        $zindex = get_option('snow_zindex', '12000');
+        $zindex = get_option('snow_zindex', '20000');
         ?>
-        <style id="snow-inline-styles">
+        <style id="snow-critical-styles">
+            /* Critical styles that must load first */
             #snow-container {
-                z-index: <?php echo esc_attr($zindex); ?> !important;
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                pointer-events: none !important;
+                z-index: <?php echo (int) $zindex; ?> !important;
+                overflow: hidden !important;
             }
+            
             .snowflake {
-                z-index: <?php echo esc_attr($zindex); ?> !important;
+                position: absolute !important;
+                user-select: none !important;
+                pointer-events: none !important;
+                z-index: <?php echo (int) $zindex; ?> !important;
+                display: block !important;
+                visibility: visible !important;
             }
         </style>
         <?php
+    }
+    
+    /**
+     * Get all settings with defaults
+     */
+    private function get_settings() {
+        return array(
+            'snowflakeCount' => (int) get_option('snow_flake_count', 60),
+            'snowflakeSpeed' => (float) get_option('snow_speed', 1),
+            'snowflakeSize'  => (int) get_option('snow_size', 8), // Increased default size
+            'snowflakeColor' => sanitize_hex_color(get_option('snow_color', '#ffffff')),
+            'snowflakeCharacter' => sanitize_text_field(get_option('snow_character', '❄')),
+            'enableOnMobile' => get_option('snow_mobile_enable', 'no'),
+            'onlyWinter' => get_option('snow_only_winter', 'no'),
+            'zIndex' => (int) get_option('snow_zindex', '20000'),
+            'enableOnAllPages' => get_option('snow_enable_all_pages', 'yes'),
+            'excludedPages' => get_option('snow_excluded_pages', ''),
+            'snowEnabled' => $this->should_show_snow() ? 'yes' : 'no'
+        );
     }
     
     /**
@@ -119,9 +136,11 @@ class SnowFallEffect {
             return;
         }
         
-        // Create snow container
+        // Create snow container with inline styles as backup
+        $zindex = (int) get_option('snow_zindex', '20000');
         ?>
-        <div id="snow-container" class="snow-container" style="z-index: <?php echo esc_attr(get_option('snow_zindex', '12000')); ?>;"></div>
+        <div id="snow-container" class="snow-container" 
+             style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:<?php echo $zindex; ?>;overflow:hidden;"></div>
         <?php
     }
     
@@ -139,6 +158,11 @@ class SnowFallEffect {
             return false;
         }
         
+        // Check if explicitly enabled via URL
+        if (isset($_GET['snow']) && $_GET['snow'] === 'on') {
+            return true;
+        }
+        
         // Check mobile setting
         $enableOnMobile = get_option('snow_mobile_enable', 'no');
         if (wp_is_mobile() && $enableOnMobile !== 'yes') {
@@ -148,7 +172,7 @@ class SnowFallEffect {
         // Check winter months setting
         $onlyWinter = get_option('snow_only_winter', 'no');
         if ($onlyWinter === 'yes') {
-            $currentMonth = date('n');
+            $currentMonth = (int) date('n');
             // Only show in December, January, February
             if (!in_array($currentMonth, [12, 1, 2])) {
                 return false;
@@ -156,23 +180,23 @@ class SnowFallEffect {
         }
         
         // Check excluded pages
-        $enableOnAllPages = get_option('snow_enable_all_pages', 'yes');
         $excludedPages = get_option('snow_excluded_pages', '');
-        
-        if ($enableOnAllPages === 'no') {
-            // Only show on specific pages
-            $current_page_id = get_queried_object_id();
-            $allowed_pages = array_map('trim', explode(',', get_option('snow_allowed_pages', '')));
-            
-            if (!in_array($current_page_id, $allowed_pages)) {
-                return false;
-            }
-        } elseif (!empty($excludedPages)) {
-            // Check if current page is excluded
+        if (!empty($excludedPages)) {
             $excluded_array = array_map('trim', explode(',', $excludedPages));
             $current_page_id = get_queried_object_id();
             
             if (in_array($current_page_id, $excluded_array)) {
+                return false;
+            }
+        }
+        
+        // Check specific pages setting
+        $enableOnAllPages = get_option('snow_enable_all_pages', 'yes');
+        if ($enableOnAllPages === 'no') {
+            $allowed_pages = array_map('trim', explode(',', get_option('snow_allowed_pages', '')));
+            $current_page_id = get_queried_object_id();
+            
+            if (!in_array($current_page_id, $allowed_pages)) {
                 return false;
             }
         }
@@ -202,15 +226,22 @@ class SnowFallEffect {
             return;
         }
         
+        // Show success message
+        if (isset($_GET['settings-updated'])) {
+            add_settings_error(
+                'snow_fall_effect_messages',
+                'snow_fall_effect_message',
+                'Settings Saved!',
+                'updated'
+            );
+        }
+        
+        // Show error messages
+        settings_errors('snow_fall_effect_messages');
         ?>
         <div class="wrap">
             <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
-            
-            <?php if (isset($_GET['settings-updated'])): ?>
-                <div class="notice notice-success is-dismissible">
-                    <p>Settings saved successfully!</p>
-                </div>
-            <?php endif; ?>
+            <p>Configure the snowfall effect on your website. For best visibility, use larger sizes and contrasting colors.</p>
             
             <form action="options.php" method="post">
                 <?php
@@ -220,21 +251,54 @@ class SnowFallEffect {
                 ?>
             </form>
             
-            <div class="snow-preview" style="margin-top: 30px; padding: 20px; background: #1e1e1e; border-radius: 5px;">
-                <h3>Troubleshooting</h3>
+            <div class="snow-debug-info" style="margin-top: 40px; padding: 20px; background: #f5f5f5; border-radius: 5px; border-left: 4px solid #2271b1;">
+                <h3>Troubleshooting & Testing</h3>
+                
+                <h4>Quick Tests:</h4>
                 <ul>
-                    <li>If snow doesn't appear, check if your theme has a high z-index on elements.</li>
-                    <li>Try increasing the z-index value above 12000.</li>
-                    <li>Check browser console for JavaScript errors (F12 → Console).</li>
-                    <li>Make sure no other plugins are conflicting.</li>
+                    <li><a href="<?php echo home_url('/?snow=on'); ?>" target="_blank">Force enable snow on current page</a></li>
+                    <li><a href="<?php echo home_url('/?snow=off'); ?>" target="_blank">Force disable snow on current page</a></li>
+                    <li><a href="<?php echo home_url('/'); ?>" target="_blank">View home page with normal settings</a></li>
                 </ul>
                 
-                <h3>Quick Test</h3>
-                <p>Visit your site with these URLs to test:</p>
-                <ul>
-                    <li><a href="<?php echo home_url('/?snow=off'); ?>" target="_blank"><?php echo home_url('/?snow=off'); ?></a> - Disable snow</li>
-                    <li><a href="<?php echo home_url('/'); ?>" target="_blank"><?php echo home_url('/'); ?></a> - Normal view</li>
-                </ul>
+                <h4>Recommended Settings for Visibility:</h4>
+                <ol>
+                    <li><strong>Snowflake Size:</strong> 8-15 pixels</li>
+                    <li><strong>Snowflake Color:</strong> #000000 (black) or #0055ff (blue) for light backgrounds</li>
+                    <li><strong>Number of Snowflakes:</strong> 30-60 (fewer = better performance)</li>
+                    <li><strong>Z-Index:</strong> 20000 or higher</li>
+                </ol>
+                
+                <h4>If snow doesn't appear:</h4>
+                <ol>
+                    <li>Check browser console (F12 → Console) for errors</li>
+                    <li>Try a different browser</li>
+                    <li>Temporarily disable other plugins to check for conflicts</li>
+                    <li>Use the test links above to verify the plugin is working</li>
+                </ol>
+                
+                <h4>Current Configuration:</h4>
+                <pre style="background: white; padding: 10px; border: 1px solid #ddd; overflow: auto;">
+<?php 
+$settings = $this->get_settings();
+foreach ($settings as $key => $value) {
+    echo htmlspecialchars("$key: " . print_r($value, true)) . "\n";
+}
+?>
+                </pre>
+            </div>
+            
+            <div class="snow-preview-area" style="margin-top: 30px;">
+                <h3>Live Preview</h3>
+                <p>The snow effect will be visible on your site's front-end. Below is a static preview of how snowflakes might look:</p>
+                <div style="height: 200px; border: 1px solid #ddd; background: #1a1a1a; position: relative; overflow: hidden; border-radius: 5px;">
+                    <div style="position: absolute; top: 10px; left: 20%; color: white; font-size: 24px; opacity: 0.8;">❄</div>
+                    <div style="position: absolute; top: 50px; left: 60%; color: white; font-size: 18px; opacity: 0.6;">❄</div>
+                    <div style="position: absolute; top: 100px; left: 40%; color: white; font-size: 32px; opacity: 0.9;">❄</div>
+                    <div style="position: absolute; top: 150px; left: 80%; color: white; font-size: 14px; opacity: 0.5;">❄</div>
+                    <div style="position: absolute; top: 30px; left: 10%; color: white; font-size: 20px; opacity: 0.7;">❄</div>
+                </div>
+                <p><small>Note: This is a static preview. The actual effect includes animation and many more snowflakes.</small></p>
             </div>
         </div>
         <?php
@@ -244,51 +308,27 @@ class SnowFallEffect {
      * Register settings
      */
     public function register_settings() {
-        // Register settings
-        register_setting('snow_fall_effect', 'snow_flake_count', array(
-            'sanitize_callback' => 'absint',
-            'default' => 80
-        ));
-        register_setting('snow_fall_effect', 'snow_speed', array(
-            'sanitize_callback' => 'floatval',
-            'default' => 1
-        ));
-        register_setting('snow_fall_effect', 'snow_size', array(
-            'sanitize_callback' => 'absint',
-            'default' => 2
-        ));
-        register_setting('snow_fall_effect', 'snow_color', array(
-            'sanitize_callback' => 'sanitize_hex_color',
-            'default' => '#ffffff'
-        ));
-        register_setting('snow_fall_effect', 'snow_character', array(
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => '❄'
-        ));
-        register_setting('snow_fall_effect', 'snow_mobile_enable', array(
-            'sanitize_callback' => array($this, 'sanitize_checkbox'),
-            'default' => 'no'
-        ));
-        register_setting('snow_fall_effect', 'snow_only_winter', array(
-            'sanitize_callback' => array($this, 'sanitize_checkbox'),
-            'default' => 'no'
-        ));
-        register_setting('snow_fall_effect', 'snow_zindex', array(
-            'sanitize_callback' => 'absint',
-            'default' => 12000
-        ));
-        register_setting('snow_fall_effect', 'snow_enable_all_pages', array(
-            'sanitize_callback' => array($this, 'sanitize_checkbox'),
-            'default' => 'yes'
-        ));
-        register_setting('snow_fall_effect', 'snow_excluded_pages', array(
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => ''
-        ));
-        register_setting('snow_fall_effect', 'snow_allowed_pages', array(
-            'sanitize_callback' => 'sanitize_text_field',
-            'default' => ''
-        ));
+        // Register settings with sanitization
+        $settings = array(
+            'snow_flake_count' => array('absint', 60),
+            'snow_speed' => array('floatval', 1.0),
+            'snow_size' => array('absint', 8),
+            'snow_color' => array('sanitize_hex_color', '#ffffff'),
+            'snow_character' => array('sanitize_text_field', '❄'),
+            'snow_mobile_enable' => array(array($this, 'sanitize_checkbox'), 'no'),
+            'snow_only_winter' => array(array($this, 'sanitize_checkbox'), 'no'),
+            'snow_zindex' => array('absint', 20000),
+            'snow_enable_all_pages' => array(array($this, 'sanitize_checkbox'), 'yes'),
+            'snow_excluded_pages' => array('sanitize_text_field', ''),
+            'snow_allowed_pages' => array('sanitize_text_field', '')
+        );
+        
+        foreach ($settings as $option => $sanitize) {
+            register_setting('snow_fall_effect', $option, array(
+                'sanitize_callback' => $sanitize[0],
+                'default' => $sanitize[1]
+            ));
+        }
         
         // Add settings section
         add_settings_section(
@@ -299,23 +339,24 @@ class SnowFallEffect {
         );
         
         // Add settings fields
-        $this->add_settings_field('snow_flake_count', 'Number of Snowflakes', 'number', '80', 'Number of snowflakes to display (1-500)');
-        $this->add_settings_field('snow_speed', 'Snowfall Speed', 'range', '1', 'Speed of snowfall (0.1 - 5)', 0.1, 5, 0.1);
-        $this->add_settings_field('snow_size', 'Snowflake Size', 'range', '2', 'Size of snowflakes in pixels (1-10)', 1, 10, 1);
-        $this->add_settings_field('snow_color', 'Snowflake Color', 'color', '#ffffff', 'Color of snowflakes');
-        $this->add_settings_field('snow_character', 'Snowflake Character', 'text', '❄', 'Character to use as snowflake (emoji or text)');
-        $this->add_settings_field('snow_mobile_enable', 'Enable on Mobile', 'checkbox', 'no', 'Show snow effect on mobile devices');
+        $this->add_settings_field('snow_flake_count', 'Number of Snowflakes', 'number', '60', 'Number of snowflakes to display (1-200). Fewer = better performance.');
+        $this->add_settings_field('snow_speed', 'Snowfall Speed', 'range', '1', 'Speed of snowfall (0.1 = slow, 5 = very fast)', 0.1, 5, 0.1);
+        $this->add_settings_field('snow_size', 'Snowflake Size', 'range', '8', 'Size of snowflakes in pixels (1-30). Larger = more visible.', 1, 30, 1);
+        $this->add_settings_field('snow_color', 'Snowflake Color', 'color', '#ffffff', 'Color of snowflakes. Use dark colors for light backgrounds.');
+        $this->add_settings_field('snow_character', 'Snowflake Character', 'text', '❄', 'Character to use as snowflake (emoji or text like * or •)');
+        $this->add_settings_field('snow_mobile_enable', 'Enable on Mobile', 'checkbox', 'no', 'Show snow effect on mobile devices (may affect performance)');
         $this->add_settings_field('snow_only_winter', 'Winter Months Only', 'checkbox', 'no', 'Show snow only in December, January, February');
-        $this->add_settings_field('snow_zindex', 'Z-Index', 'number', '12000', 'CSS z-index value (higher values appear on top) - Start with 12000');
+        $this->add_settings_field('snow_zindex', 'Z-Index', 'number', '20000', 'CSS z-index value (higher values appear on top). Start with 20000.', 1, 999999);
         $this->add_settings_field('snow_enable_all_pages', 'Enable on All Pages', 'checkbox', 'yes', 'Show snow on all pages by default');
-        $this->add_settings_field('snow_excluded_pages', 'Excluded Page IDs', 'text', '', 'Comma-separated page IDs to exclude snow effect');
+        $this->add_settings_field('snow_excluded_pages', 'Excluded Page IDs', 'text', '', 'Comma-separated page/post IDs to exclude snow effect');
+        $this->add_settings_field('snow_allowed_pages', 'Allowed Page IDs', 'text', '', 'If "Enable on All Pages" is NO, list allowed page IDs here (comma-separated)');
     }
     
     /**
      * Section callback
      */
     public function section_callback() {
-        echo '<p>Configure the snowfall effect. The default z-index is 12000. If snow doesn\'t appear, try increasing this value.</p>';
+        echo '<p>Configure the snowfall effect below. Changes will be visible immediately on your site.</p>';
     }
     
     /**
@@ -330,34 +371,50 @@ class SnowFallEffect {
                 
                 switch ($type) {
                     case 'number':
-                        echo '<input type="number" id="' . esc_attr($id) . '" name="' . esc_attr($id) . '" value="' . esc_attr($value) . '" class="regular-text"';
-                        if ($min !== null) echo ' min="' . esc_attr($min) . '"';
-                        if ($max !== null) echo ' max="' . esc_attr($max) . '"';
-                        if ($step !== null) echo ' step="' . esc_attr($step) . '"';
-                        echo '>';
+                        printf(
+                            '<input type="number" id="%1$s" name="%1$s" value="%2$s" class="regular-text" min="%3$s" max="%4$s">',
+                            esc_attr($id),
+                            esc_attr($value),
+                            esc_attr($min ?: '1'),
+                            esc_attr($max ?: '999999')
+                        );
                         break;
                         
                     case 'range':
-                        echo '<input type="range" id="' . esc_attr($id) . '" name="' . esc_attr($id) . '" value="' . esc_attr($value) . '"';
-                        if ($min !== null) echo ' min="' . esc_attr($min) . '"';
-                        if ($max !== null) echo ' max="' . esc_attr($max) . '"';
-                        if ($step !== null) echo ' step="' . esc_attr($step) . '"';
-                        echo ' style="width: 300px;">';
-                        echo ' <span id="' . esc_attr($id) . '_value">' . esc_html($value) . '</span>';
-                        echo '<script>document.getElementById("' . esc_js($id) . '").addEventListener("input", function(e) { document.getElementById("' . esc_js($id) . '_value").textContent = e.target.value; });</script>';
+                        printf(
+                            '<input type="range" id="%1$s" name="%1$s" value="%2$s" min="%3$s" max="%4$s" step="%5$s" style="width: 300px;" oninput="document.getElementById(\'%1$s-value\').textContent = this.value">',
+                            esc_attr($id),
+                            esc_attr($value),
+                            esc_attr($min ?: '0.1'),
+                            esc_attr($max ?: '5'),
+                            esc_attr($step ?: '0.1')
+                        );
+                        echo ' <span id="' . esc_attr($id) . '-value">' . esc_html($value) . '</span>';
                         break;
                         
                     case 'color':
-                        echo '<input type="color" id="' . esc_attr($id) . '" name="' . esc_attr($id) . '" value="' . esc_attr($value) . '">';
+                        printf(
+                            '<input type="color" id="%1$s" name="%1$s" value="%2$s">',
+                            esc_attr($id),
+                            esc_attr($value)
+                        );
                         break;
                         
                     case 'checkbox':
-                        echo '<input type="checkbox" id="' . esc_attr($id) . '" name="' . esc_attr($id) . '" value="yes"' . checked($value, 'yes', false) . '>';
+                        printf(
+                            '<input type="checkbox" id="%1$s" name="%1$s" value="yes" %2$s>',
+                            esc_attr($id),
+                            checked($value, 'yes', false)
+                        );
                         break;
                         
                     case 'text':
                     default:
-                        echo '<input type="text" id="' . esc_attr($id) . '" name="' . esc_attr($id) . '" value="' . esc_attr($value) . '" class="regular-text">';
+                        printf(
+                            '<input type="text" id="%1$s" name="%1$s" value="%2$s" class="regular-text">',
+                            esc_attr($id),
+                            esc_attr($value)
+                        );
                         break;
                 }
                 
@@ -389,3 +446,32 @@ class SnowFallEffect {
 
 // Initialize the plugin
 SnowFallEffect::get_instance();
+
+// Activation hook
+register_activation_hook(__FILE__, function() {
+    // Set default options if not exists
+    $defaults = array(
+        'snow_flake_count' => 60,
+        'snow_speed' => 1.0,
+        'snow_size' => 8,
+        'snow_color' => '#ffffff',
+        'snow_character' => '❄',
+        'snow_mobile_enable' => 'no',
+        'snow_only_winter' => 'no',
+        'snow_zindex' => 20000,
+        'snow_enable_all_pages' => 'yes',
+        'snow_excluded_pages' => '',
+        'snow_allowed_pages' => ''
+    );
+    
+    foreach ($defaults as $option => $value) {
+        if (get_option($option) === false) {
+            add_option($option, $value);
+        }
+    }
+});
+
+// Deactivation hook
+register_deactivation_hook(__FILE__, function() {
+    // Clean up if needed
+});
